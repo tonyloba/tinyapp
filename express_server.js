@@ -20,32 +20,39 @@ const urlDatabase = {
 };
 
 // const users = {
-//   "userRandomID" : {
-//     id:"userRandomID",
-//     username:"anyName"
-//   }
+//   
 // }
 
 
 // Cookies :
-// Login :
+
 
 app.get("/login", (req, res) => {
   
   const templateVars = {
-    username : req.cookies["username"]
+    user : req.cookies["user"]
   };
   
-  res.render("partials/_header", templateVars);
+  res.render("login", templateVars);
 });
 
+
+// Login :
 app.post("/login", (req, res) => { 
   
- res.cookie(username, req.body.username);
+ res.cookie("user", req.body.user);
   
     res.redirect("/urls");    
 });
 
+// Logout
+
+app.post("/logout", (req, res) => { 
+  
+res.clearCookie('user')
+   
+     res.redirect("/urls");    
+ });
 
 
 
@@ -53,7 +60,10 @@ app.post("/login", (req, res) => {
 //Create page to make new URLs:
 
 app.get("/urls/new", (req, res) => {
-  res.render("urls_new");
+  const templateVars = {
+    user : req.cookies["user"]
+  };
+  res.render("urls_new",templateVars);
 });
 
 // submit data POST with generated shortURL, adds it to urlDatabase  and redirects to "/urls/:shortURL"
@@ -69,7 +79,7 @@ app.post("/urls", (req, res) => {
 
 // Create page for newly created shortURL:
 app.get("/urls/:shortURL", (req, res) => {
-  const templateVars = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL].longURL};
+  const templateVars = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL].longURL, user : req.cookies['user']};
   res.render("urls_show", templateVars);
 });
 
@@ -83,7 +93,8 @@ app.get("/u/:shortURL", (req, res) => {
 
 ///Home page render
 app.get("/urls", (req, res) => {
-  const templateVars = { urls: urlDatabase };
+  const templateVars = { urls: urlDatabase, user : req.cookies['user']};
+
   res.render("urls_index", templateVars);
 });
 
