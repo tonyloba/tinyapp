@@ -1,6 +1,10 @@
 const express = require("express");
 const app = express();
 const PORT = 8080; // default port 8080
+
+const cookieParser = require('cookie-parser');
+app.use(cookieParser());
+
 const bodyParser = require("body-parser");
 app.use(bodyParser.urlencoded({extended: true}));
 
@@ -8,13 +12,43 @@ app.use(bodyParser.urlencoded({extended: true}));
 // set the view engine to ejs
 app.set("view engine", "ejs");
 
-// Index page:
 
 const urlDatabase = {
    "b2xVn2": {longURL: "http://www.lighthouselabs.ca"},
    "9sm5xK": {longURL: "http://www.google.com"},
    "bnun15": {longURL: "http://www.tweeter.com"}
 };
+
+// const users = {
+//   "userRandomID" : {
+//     id:"userRandomID",
+//     username:"anyName"
+//   }
+// }
+
+
+// Cookies :
+// Login :
+
+app.get("/login", (req, res) => {
+  
+  const templateVars = {
+    username : req.cookies["username"]
+  };
+  
+  res.render("partials/_header", templateVars);
+});
+
+app.post("/login", (req, res) => { 
+  
+ res.cookie(username, req.body.username);
+  
+    res.redirect("/urls");    
+});
+
+
+
+
 
 //Create page to make new URLs:
 
@@ -61,6 +95,20 @@ app.post("/urls/:shortURL/delete", (req, res) => {
   res.redirect("/urls")
 
 })
+
+
+// Update URL page:
+app.post("/urls/:shortURL", (req,res) => {
+// shortUrl remains (get from object keys)
+const shortURL = req.params.shortURL;
+//longURL is entered by user: retreive from the body key
+const longURL = req.body.longURL;
+
+ res.redirect("/urls");
+})
+
+
+
 
 
 app.listen(PORT, () => {
