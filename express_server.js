@@ -30,14 +30,16 @@ const users = {
     email: "user2@example.com", 
     password: "dishwasher-funk"
   }
+
 }
 
 
-// Register NEW user:
+////////////// REGISTER  NEW user:
 app.get("/register",(req,res) => {
+
   const userID = req.cookies["user_id"];
   const templateVars = {
-    user : req.cookies["user_id"]
+    user : users[userID]
   };
   res.render("register",templateVars)
 })
@@ -45,30 +47,43 @@ app.get("/register",(req,res) => {
 app.post("/register",(req,res) => {
   const email = req.body.email;
   const password = req.body.password;
-
+  if (!email || !password) {
+    res.status(400).send("400 Email and Password are empty!");
+  } 
   if (findUserByEmail(email, users)) {
     res.status(400).send("400 This email is already registered");
   } else {
     const userId = generateRandomString();
-    newUserItem = {
+    user = {
       id:userId, 
       email,
       password 
     };
-    users[userId] = newUserItem;
-    req.cookies["user_id"]= userId;
+    users[userId] = user;
+    res.cookie("user_id",userId);
   }
   res.redirect("/urls");
 });
 
 
+//////////////////  LOGIN :
 
 
-// Cookies :
+
+
+
+
+
+
+
+
+//////////////// COOKIES :
+
+//LOGIN:
 app.get("/login", (req, res) => {
   const userID = req.cookies["user_id"];  
   const templateVars = {
-    user : req.cookies["user_id"]
+    user : users[userID]
   };
     res.redirect("/urls");    
 });
@@ -81,33 +96,56 @@ app.post("/logout", (req, res) => {
 
 
 
-//Create page to make new URLs:
+/////////////// NEW URL PAGES:
 
 app.get("/urls/new", (req, res) => {
   const userID = req.cookies["user_id"];
   const templateVars = {
-    user : req.cookies["user_id"]
+     user : users[userID]
   };
   res.render("urls_new",templateVars);
 });
 
-// submit data POST with generated shortURL, adds it to urlDatabase  and redirects to "/urls/:shortURL"
+// submit  with generated shortURL, adds it to urlDatabase  and redirects to "/urls/:shortURL"
 app.post("/urls", (req, res) => {
   const shortURL = generateRandomString();
   //console.log(req.body);  // Log the POST request body to the console
-  //res.send("Ok");         // Respond with 'Ok' (we will replace this)
+  
   res.redirect(`/urls/${shortURL}`);
 });
 
 
-//New ShortURL pages
+//////////NEW ShortURL pages///////////////////
 
 // Create page for newly created shortURL:
 app.get("/urls/:shortURL", (req, res) => {
   const userID = req.cookies["user_id"];
-  const templateVars = { shortURL: req.params.shortURL, longURL: urlDatabase[req.params.shortURL].longURL, user : req.cookies["user_id"]};
+  const templateVars = { 
+    shortURL: req.params.shortURL, 
+    longURL: urlDatabase[req.params.shortURL].longURL, 
+    user : users[userID] //
+  };
   res.render("urls_show", templateVars);
 });
+
+
+//////// Delete URL pages :
+app.post("/urls/:shortURL/delete", (req, res) => {
+
+  delete urlDatabase[req.params.shortURL];
+  res.redirect("/urls")
+})
+
+/////// Update URL page:
+app.post("/urls/:shortURL", (req,res) => {
+// shortUrl remains (get from object keys)
+const shortURL = req.params.shortURL;
+//longURL is entered by user: retreive from the body key
+const longURL = req.body.longURL;
+ res.redirect("/urls");
+})
+
+
 
 // endpoint "/u/:shortURL" will redirect to its longURL
 app.get("/u/:shortURL", (req, res) => {
@@ -117,32 +155,21 @@ app.get("/u/:shortURL", (req, res) => {
 });
 
 
-///Home page render
+//////////HOME PAGE////////////////
+
 app.get("/urls", (req, res) => {
-  const templateVars = { urls: urlDatabase, user : req.cookies["user_id"]};
+  const userID = req.cookies["user_id"]; 
+  //console.log('userID', userID)
+  const user = users[userID];
+  //console.log(user); 
+  const templateVars = { 
+    urls: urlDatabase, 
+    user : users[userID] };
 
   res.render("urls_index", templateVars);
 });
 
 
-// Delete URL pages :
-app.post("/urls/:shortURL/delete", (req, res) => {
-
-  delete urlDatabase[req.params.shortURL];
-  res.redirect("/urls")
-
-})
-
-
-// Update URL page:
-app.post("/urls/:shortURL", (req,res) => {
-// shortUrl remains (get from object keys)
-const shortURL = req.params.shortURL;
-//longURL is entered by user: retreive from the body key
-const longURL = req.body.longURL;
-
- res.redirect("/urls");
-})
 
 
 
@@ -155,7 +182,8 @@ app.listen(PORT, () => {
 
 
 
-// HELPER FUNCTIONS:
+// HELPER FUNCTIONS://///////
+
 const generateRandomString = function() {
   const str = Math.random().toString(36).substring(2,8);
   return str;
@@ -173,11 +201,5 @@ const findUserByEmail = (email, userDB) => {
 
 
 
-// app.get("/urls.json", (req, res) => {
-//   res.json(urlDatabase);
-// });
-// app.get("/hello", (req, res) => {
-//   res.send("<html><body>Hello <b>World</b></body></html>\n");
-// });
 
 
