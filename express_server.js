@@ -8,6 +8,14 @@ app.use(cookieParser());
 const bodyParser = require("body-parser");
 app.use(bodyParser.urlencoded({extended: true}));
 
+const bcrypt = require('bcryptjs');
+
+const cookieSession = require('cookie-session');
+app.use(cookieSession({
+  name: 'MyRandomCookieSession',
+  keys: ['key1', 'key2']
+}))
+
 
 // set the view engine to ejs
 app.set("view engine", "ejs");
@@ -93,6 +101,21 @@ app.post("/login", (req, res) => {
    
 });
 
+// check for /u:id
+
+app.get("/u/:id", (req, res) => {
+  const userID = req.cookies["user_id"];
+  if (userID) {
+    res.redirect("/urls");
+    //return;
+  } 
+  if (!userID) {
+    res.status(403).send("403 That id does not exist");
+    res.redirect("/login");
+  }
+});
+// 2gwdqh
+
 //////////////// COOKIES :
 
 // Logout :
@@ -103,20 +126,27 @@ app.post("/logout", (req, res) => {
 
 
 
-/////////////// NEW URL PAGES:
+/////////////// NEW URL PAGES://///////////////
 
 app.get("/urls/new", (req, res) => {
   const userID = req.cookies["user_id"];
-  const templateVars = {
-     user : users[userID]
-  };
+  // check logic if not our user -> to urls
+  if (!userID) {
+    res.redirect("/login")
+  } else {
+    const templateVars = { 
+      user: users[userID],
+      longURL: req.body.longURL,
+      shortURL: req.body.shortURL
+    };
   res.render("urls_new",templateVars);
+  }
 });
 
 // submit  with generated shortURL, adds it to urlDatabase  and redirects to "/urls/:shortURL"
 app.post("/urls", (req, res) => {
   const shortURL = generateRandomString();
-  //console.log(req.body);  // Log the POST request body to the console
+  //console.log(req.body);  // Log the POST request body to the console  
   urlDatabase[shortURL] = {
     longURL : req.body.longURL, 
     userID: req.cookies["user_id"]
@@ -154,24 +184,30 @@ const longURL = req.body.longURL;
 })
 
 
-
 // endpoint "/u/:shortURL" will redirect to its longURL
 app.get("/u/:shortURL", (req, res) => {
-   const longURL = urlDatabase[req.params.shortURL].longURL
+   const longURL = urlDatabase[req.params.shortURL].longURL;
+   const templateVars = {
+    user : users[userID]
+  };
   res.redirect(longURL);
-  
+  res.render("urls_show", templateVars);
+
 });
 
 
 //////////HOME PAGE////////////////
 
 app.get("/urls", (req, res) => {
-  const userID = req.cookies["user_id"]; 
+  const userID = req.cookies["user_id"];
+  // return URL specific for each userID using 'data' var:
+  const data = urlsForUser(userID, urlDatabase);
+
   //console.log('userID', userID)
   const user = users[userID];
   //console.log(user); 
   const templateVars = { 
-    urls: urlDatabase, 
+    urls: urlDatabase,  // urlDatabase-all view , or data -userID 
     user : users[userID] };
 
   res.render("urls_index", templateVars);
@@ -207,14 +243,59 @@ const findUserByEmail = (email, userDB) => {
   return false;
 }
 
-const checkPass = (password, userDB) => {
-  for (const user in userDB) {
-    if (userDB[user].password === password) {
-      return true;
+//// check userID anr returns its specific URLs:
+const urlsForUser = function(id, urlDatabase) {
+  let urls = {}
+  for (const key in urlDatabase) {
+    if (id === urlDatabase[key].userID) {
+      urls[key] = urlDatabase[key]
     }
   }
-  return false;
+  return urls;
 }
 
 
 
+
+// const authenticateUser = (userDB, email, password) => {
+// 	if (userDB[email]) {
+// 		// if (userDB[email].password === password) {
+// 		if (bcrypt.compareSync(password, userDB[email].password)) {
+// 			// Email & password match
+// 			return { user: userDB[email], error: null };
+// 		}
+// 		// Bad password
+// 		return { user: null, error: "bad password" };
+// 	}
+// 	// Bad email
+// 	return { user: null, error: "bad email" };
+
+// const protectRoutes = (req, res, next) => {
+// 	const email = req.session.email;
+// 	const path = req.path;
+// 	const allowedPaths = ["/", "/login"];
+
+// 	if (allowedPaths.includes(path)) {
+// 		return next();
+// 	}
+// 	if (!email) {
+// 		return res.redirect("/");
+// 	}
+
+// 	next();
+// };
+
+// const protectRoutes2 = (req, res, next) => {
+// 	const email = req.session.email;
+// 	const path = req.path;
+// 	const allowedPaths = ["/", "/login"];
+
+// 	if (allowedPaths.includes(path)) {
+// 		return next();
+// 	}
+// 	if (!email) {
+// 		return res.redirect("/");
+// 	}
+
+// 	next();
+// };
