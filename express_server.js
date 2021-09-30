@@ -8,7 +8,7 @@ app.use(cookieParser());
 const bodyParser = require("body-parser");
 app.use(bodyParser.urlencoded({extended: true}));
 
-const bcrypt = require('bcryptjs');
+const bcrypt = require('bcrypt');
 
 const cookieSession = require('cookie-session');
 app.use(cookieSession({
@@ -55,25 +55,35 @@ app.get("/register",(req,res) => {
 
 app.post("/register",(req,res) => {
   const email = req.body.email;
-  const password = req.body.password;
+  const password = bcrypt.hashSync(req.body.password,10);
   if (!email || !password) {
     res.status(400).send("400 Email and Password are empty!");
   } 
   if (findUserByEmail(email, users)) {
     res.status(400).send("400 This email is already registered");
   } else {
-    const userId = generateRandomString();
+    const userID = generateRandomString();
     user = {
-      id:userId, 
+      id:userID, 
       email,
       password 
     };
-    users[userId] = user;
-    res.cookie("user_id",userId);
+    users[userID] = user;
+    res.cookie("user_id",userID);
   }
   res.redirect("/urls");
 });
 
+
+
+app.get("/", (req, res) => {
+  const userID = req.cookies["user_id"];
+  if (userID) {
+    res.redirect("/urls");
+    return;
+  } 
+  res.redirect("/login");
+});
 
 //////////////////  LOGIN :
 
@@ -91,14 +101,16 @@ app.post("/login", (req, res) => {
   if (!email || !password) {
     res.status(400).send("400 Email and password fields cannot be empty");
   }
-  if (!findUserByEmail(email, users)) {
+  if (!findUserByEmail(email, users) || !authenticateUser(users, email, password)) {
     res.status(403).send("403 Email or Password are incorrect");
     //if email exits & password is correct
-  } 
-    
-  req.cookies["user_id"] = userID
-    res.redirect("/urls");  
+  } else {
+    const newId = authenticateUser(users, email, password);
+    //console.log(newId);
+    res.cookie("user_id", newId);
    
+      res.redirect("/urls");  
+  }   
 });
 
 // check for /u:id
@@ -110,11 +122,11 @@ app.get("/u/:id", (req, res) => {
     //return;
   } 
   if (!userID) {
-    res.status(403).send("403 That id does not exist");
+    res.status(403).send("403 This is not yours!!!");
     res.redirect("/login");
   }
 });
-// 2gwdqh
+
 
 //////////////// COOKIES :
 
@@ -144,6 +156,7 @@ app.get("/urls/new", (req, res) => {
 });
 
 // submit  with generated shortURL, adds it to urlDatabase  and redirects to "/urls/:shortURL"
+
 app.post("/urls", (req, res) => {
   const shortURL = generateRandomString();
   //console.log(req.body);  // Log the POST request body to the console  
@@ -169,6 +182,19 @@ app.get("/urls/:shortURL", (req, res) => {
 
 //////// Delete URL pages :
 app.post("/urls/:shortURL/delete", (req, res) => {
+  const shortURL = req.params.shortURL;
+  const longURL = req.body.longURL;
+  const userID = req.cookies["user_id"];
+  if (!userID) {
+    res.status(401).send("401 Must be logged in");
+  }
+  if(userID && userID === urlDatabase[shortURL].userID){
+    delete urlDatabase[shortURL];
+    
+     res.redirect("/urls");
+  }else {
+    res.status(403).send("403 You are not authorized");
+  }
 
   delete urlDatabase[req.params.shortURL];
   res.redirect("/urls")
@@ -180,7 +206,18 @@ app.post("/urls/:shortURL", (req,res) => {
 const shortURL = req.params.shortURL;
 //longURL is entered by user: retreive from the body key
 const longURL = req.body.longURL;
- res.redirect("/urls");
+const userID = req.cookies["user_id"];
+if (!users[userID]) {
+  res.status(401).send("401 Must be logged in");
+}
+if(userID && userID === urlDatabase[shortURL].userID){
+
+  urlDatabase[shortURL] = {longURL: longURL, userID: userID };
+   res.redirect("/urls");
+}else {
+  res.status(403).send("403 You are not authorized");
+}
+
 })
 
 
@@ -202,14 +239,15 @@ app.get("/urls", (req, res) => {
   const userID = req.cookies["user_id"];
   // return URL specific for each userID using 'data' var:
   const data = urlsForUser(userID, urlDatabase);
-
   //console.log('userID', userID)
   const user = users[userID];
   //console.log(user); 
   const templateVars = { 
-    urls: urlDatabase,  // urlDatabase-all view , or data -userID 
+    urls: data,  // urlDatabase-all view , or data -userID 
     user : users[userID] };
-
+    if(!users[userID]){
+      return res.status(401).send("You must log in")
+    }
   res.render("urls_index", templateVars);
 });
 
@@ -217,7 +255,7 @@ app.get("/urls", (req, res) => {
 
 
 
-
+/////// SERVER //////
 
 app.listen(PORT, () => {
   console.log(`Example app listening on port ${PORT}!`);
@@ -237,7 +275,7 @@ const generateRandomString = function() {
 const findUserByEmail = (email, userDB) => {
   for (const user in userDB) {
     if (userDB[user].email === email) {
-      return true;
+      return userDB[user];
     }
   }
   return false;
@@ -253,6 +291,25 @@ const urlsForUser = function(id, urlDatabase) {
   }
   return urls;
 }
+
+const authenticateUser = (users, email, password) => {
+ const tempVal = findUserByEmail(email, users) 
+	if (tempVal) {
+		// if (users[email].password === password) {
+		if (bcrypt.compareSync(password, tempVal.password)) {
+			// Email & password match
+			return tempVal.id
+		}
+		// Bad password
+		return { user: null, error: "bad password" };
+	}
+	// Bad email
+	return { user: null, error: "bad email" };
+
+}
+
+
+
 
 
 
@@ -298,4 +355,16 @@ const urlsForUser = function(id, urlDatabase) {
 // 	}
 
 // 	next();
-// };
+// }
+
+
+
+// const checkEmail = function(email, password, users) {
+//   for (const key in users) {
+//     const hashedPassword = users[key].password;
+//     if (bcrypt.compareSync(password, hashedPassword) && users[key].email === email) {
+//       return true;
+//     }
+//   }
+//   return false;
+// }
