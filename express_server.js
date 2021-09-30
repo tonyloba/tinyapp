@@ -14,9 +14,9 @@ app.set("view engine", "ejs");
 
 
 const urlDatabase = {
-   "b2xVn2": {longURL: "http://www.lighthouselabs.ca"},
-   "9sm5xK": {longURL: "http://www.google.com"},
-   "bnun15": {longURL: "http://www.tweeter.com"}
+   "b2xVn2": {longURL: "http://www.lighthouselabs.ca", userID:"sdfsdf"},
+   "9sm5xK": {longURL: "http://www.google.com", userID:"s34r3f"},
+   "bnun15": {longURL: "http://www.tweeter.com", userID: "wrg5df"}
 };
 
 const users = { 
@@ -35,6 +35,7 @@ const users = {
 
 
 ////////////// REGISTER  NEW user:
+
 app.get("/register",(req,res) => {
 
   const userID = req.cookies["user_id"];
@@ -68,25 +69,31 @@ app.post("/register",(req,res) => {
 
 //////////////////  LOGIN :
 
-
-
-
-
-
-
-
-
-
-//////////////// COOKIES :
-
-//LOGIN:
 app.get("/login", (req, res) => {
   const userID = req.cookies["user_id"];  
   const templateVars = {
     user : users[userID]
   };
-    res.redirect("/urls");    
+    res.render("login",templateVars);    
 });
+
+app.post("/login", (req, res) => {
+  const email = req.body.email;
+  const password = req.body.password;
+  if (!email || !password) {
+    res.status(400).send("400 Email and password fields cannot be empty");
+  }
+  if (!findUserByEmail(email, users)) {
+    res.status(403).send("403 Email or Password are incorrect");
+    //if email exits & password is correct
+  } 
+    
+  req.cookies["user_id"] = userID
+    res.redirect("/urls");  
+   
+});
+
+//////////////// COOKIES :
 
 // Logout :
 app.post("/logout", (req, res) => {   
@@ -110,20 +117,21 @@ app.get("/urls/new", (req, res) => {
 app.post("/urls", (req, res) => {
   const shortURL = generateRandomString();
   //console.log(req.body);  // Log the POST request body to the console
-  
+  urlDatabase[shortURL] = {
+    longURL : req.body.longURL, 
+    userID: req.cookies["user_id"]
+  };
   res.redirect(`/urls/${shortURL}`);
 });
 
 
-//////////NEW ShortURL pages///////////////////
+////////// NEW ShortURL pages ///////////////////
 
 // Create page for newly created shortURL:
 app.get("/urls/:shortURL", (req, res) => {
   const userID = req.cookies["user_id"];
   const templateVars = { 
-    shortURL: req.params.shortURL, 
-    longURL: urlDatabase[req.params.shortURL].longURL, 
-    user : users[userID] //
+    shortURL: req.params.shortURL,longURL: urlDatabase[req.params.shortURL].longURL,user : users[userID] //
   };
   res.render("urls_show", templateVars);
 });
@@ -199,7 +207,14 @@ const findUserByEmail = (email, userDB) => {
   return false;
 }
 
-
+const checkPass = (password, userDB) => {
+  for (const user in userDB) {
+    if (userDB[user].password === password) {
+      return true;
+    }
+  }
+  return false;
+}
 
 
 
