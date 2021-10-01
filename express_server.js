@@ -16,6 +16,7 @@ app.use(cookieSession({
   keys: ['key1', 'key2']
 }))
 
+const  {generateRandomString,findUserByEmail,urlsForUser,authenticateUser,emailMatchPass} = require('./helpers')
 
 // set the view engine to ejs
 app.set("view engine", "ejs");
@@ -46,7 +47,7 @@ const users = {
 
 app.get("/register",(req,res) => {
 
-  const userID = req.cookies["user_id"];
+  const userID = req.session["user_id"];
   const templateVars = {
     user : users[userID]
   };
@@ -56,6 +57,7 @@ app.get("/register",(req,res) => {
 app.post("/register",(req,res) => {
   const email = req.body.email;
   const password = bcrypt.hashSync(req.body.password,10);
+  
   if (!email || !password) {
     res.status(400).send("400 Email and Password are empty!");
   } 
@@ -69,15 +71,16 @@ app.post("/register",(req,res) => {
       password 
     };
     users[userID] = user;
-    res.cookie("user_id",userID);
+    //res.session("user_id",userID);
+    req.session["user_id"] = userID;
+    res.redirect("/urls");
   }
-  res.redirect("/urls");
 });
 
 
 
 app.get("/", (req, res) => {
-  const userID = req.cookies["user_id"];
+  const userID = req.session["user_id"];
   if (userID) {
     res.redirect("/urls");
     return;
@@ -88,7 +91,7 @@ app.get("/", (req, res) => {
 //////////////////  LOGIN :
 
 app.get("/login", (req, res) => {
-  const userID = req.cookies["user_id"];  
+  const userID = req.session["user_id"];  
   const templateVars = {
     user : users[userID]
   };
@@ -98,16 +101,20 @@ app.get("/login", (req, res) => {
 app.post("/login", (req, res) => {
   const email = req.body.email;
   const password = req.body.password;
+
   if (!email || !password) {
     res.status(400).send("400 Email and password fields cannot be empty");
   }
-  if (!findUserByEmail(email, users) || !authenticateUser(users, email, password)) {
+  // if (!findUserByEmail(email, users) || authenticateUser(users, email, password).error) 
+  if (!findUserByEmail(email, users) || !emailMatchPass(email, password, users))
+  {
     res.status(403).send("403 Email or Password are incorrect");
     //if email exits & password is correct
   } else {
     const newId = authenticateUser(users, email, password);
-    //console.log(newId);
-    res.cookie("user_id", newId);
+    console.log(users, email, password);
+    //req.session("user_id", newId);
+    req.session["user_id"] = newId;
    
       res.redirect("/urls");  
   }   
@@ -116,7 +123,7 @@ app.post("/login", (req, res) => {
 // check for /u:id
 
 app.get("/u/:id", (req, res) => {
-  const userID = req.cookies["user_id"];
+  const userID = req.session["user_id"];
   if (userID) {
     res.redirect("/urls");
     //return;
@@ -132,7 +139,8 @@ app.get("/u/:id", (req, res) => {
 
 // Logout :
 app.post("/logout", (req, res) => {   
-  res.clearCookie("user_id")   
+  //res.clearCookie("user_id")
+      req.session = null  
      res.redirect("/urls");    
  });
 
@@ -141,7 +149,7 @@ app.post("/logout", (req, res) => {
 /////////////// NEW URL PAGES://///////////////
 
 app.get("/urls/new", (req, res) => {
-  const userID = req.cookies["user_id"];
+  const userID = req.session["user_id"];
   // check logic if not our user -> to urls
   if (!userID) {
     res.redirect("/login")
@@ -162,7 +170,7 @@ app.post("/urls", (req, res) => {
   //console.log(req.body);  // Log the POST request body to the console  
   urlDatabase[shortURL] = {
     longURL : req.body.longURL, 
-    userID: req.cookies["user_id"]
+    userID: req.session["user_id"]
   };
   res.redirect(`/urls/${shortURL}`);
 });
@@ -172,7 +180,7 @@ app.post("/urls", (req, res) => {
 
 // Create page for newly created shortURL:
 app.get("/urls/:shortURL", (req, res) => {
-  const userID = req.cookies["user_id"];
+  const userID = req.session["user_id"];
   const templateVars = { 
     shortURL: req.params.shortURL,longURL: urlDatabase[req.params.shortURL].longURL,user : users[userID] //
   };
@@ -180,11 +188,24 @@ app.get("/urls/:shortURL", (req, res) => {
 });
 
 
+// endpoint "/u/:shortURL" will redirect to its longURL
+app.get("/u/:shortURL", (req, res) => {
+  const userID = req.session["user_id"];
+  const longURL = urlDatabase[req.params.shortURL].longURL;
+  const templateVars = {
+   user : users[userID]
+ };
+ res.redirect(longURL);
+ res.render("urls_show", templateVars);
+
+});
+
+
 //////// Delete URL pages :
 app.post("/urls/:shortURL/delete", (req, res) => {
   const shortURL = req.params.shortURL;
   const longURL = req.body.longURL;
-  const userID = req.cookies["user_id"];
+  const userID = req.session["user_id"];
   if (!userID) {
     res.status(401).send("401 Must be logged in");
   }
@@ -206,7 +227,7 @@ app.post("/urls/:shortURL", (req,res) => {
 const shortURL = req.params.shortURL;
 //longURL is entered by user: retreive from the body key
 const longURL = req.body.longURL;
-const userID = req.cookies["user_id"];
+const userID = req.session["user_id"];
 if (!users[userID]) {
   res.status(401).send("401 Must be logged in");
 }
@@ -221,22 +242,10 @@ if(userID && userID === urlDatabase[shortURL].userID){
 })
 
 
-// endpoint "/u/:shortURL" will redirect to its longURL
-app.get("/u/:shortURL", (req, res) => {
-   const longURL = urlDatabase[req.params.shortURL].longURL;
-   const templateVars = {
-    user : users[userID]
-  };
-  res.redirect(longURL);
-  res.render("urls_show", templateVars);
-
-});
-
-
 //////////HOME PAGE////////////////
 
 app.get("/urls", (req, res) => {
-  const userID = req.cookies["user_id"];
+  const userID = req.session["user_id"];
   // return URL specific for each userID using 'data' var:
   const data = urlsForUser(userID, urlDatabase);
   //console.log('userID', userID)
@@ -245,13 +254,13 @@ app.get("/urls", (req, res) => {
   const templateVars = { 
     urls: data,  // urlDatabase-all view , or data -userID 
     user : users[userID] };
-    if(!users[userID]){
-      return res.status(401).send("You must log in")
-    }
+    // if(!users[userID]){
+    //   res.status(401).send("You must log in");
+    
+    // }
+   
   res.render("urls_index", templateVars);
 });
-
-
 
 
 
@@ -264,62 +273,51 @@ app.listen(PORT, () => {
 
 
 
+
+
+
+
+
+
+
+
+
+
 // HELPER FUNCTIONS://///////
 
-const generateRandomString = function() {
-  const str = Math.random().toString(36).substring(2,8);
-  return str;
-}
+// const generateRandomString = function() {
+//   const str = Math.random().toString(36).substring(2,8);
+//   return str;
+// }
 
-// check if email exists:
-const findUserByEmail = (email, userDB) => {
-  for (const user in userDB) {
-    if (userDB[user].email === email) {
-      return userDB[user];
-    }
-  }
-  return false;
-}
+// // check if email exists:
+// const findUserByEmail = (email, userDB) => {
+//   for (const user in userDB) {
+//     if (userDB[user].email === email) {
+//       return userDB[user];
+//     }
+//   }
+//   return false;
+// }
 
-//// check userID anr returns its specific URLs:
-const urlsForUser = function(id, urlDatabase) {
-  let urls = {}
-  for (const key in urlDatabase) {
-    if (id === urlDatabase[key].userID) {
-      urls[key] = urlDatabase[key]
-    }
-  }
-  return urls;
-}
+// //// check userID anr returns its specific URLs:
+// const urlsForUser = function(id, urlDatabase) {
+//   let urls = {}
+//   for (const key in urlDatabase) {
+//     if (id === urlDatabase[key].userID) {
+//       urls[key] = urlDatabase[key]
+//     }
+//   }
+//   return urls;
+// }
 
-const authenticateUser = (users, email, password) => {
- const tempVal = findUserByEmail(email, users) 
-	if (tempVal) {
-		// if (users[email].password === password) {
-		if (bcrypt.compareSync(password, tempVal.password)) {
-			// Email & password match
-			return tempVal.id
-		}
-		// Bad password
-		return { user: null, error: "bad password" };
-	}
-	// Bad email
-	return { user: null, error: "bad email" };
-
-}
-
-
-
-
-
-
-
-// const authenticateUser = (userDB, email, password) => {
-// 	if (userDB[email]) {
-// 		// if (userDB[email].password === password) {
-// 		if (bcrypt.compareSync(password, userDB[email].password)) {
+// const authenticateUser = (users, email, password) => {
+//  const tempVal = findUserByEmail(email, users) 
+// 	if (tempVal) {
+// 		// if (users[email].password === password) {
+// 		if (bcrypt.compareSync(password, tempVal.password)) {
 // 			// Email & password match
-// 			return { user: userDB[email], error: null };
+// 			return tempVal.id
 // 		}
 // 		// Bad password
 // 		return { user: null, error: "bad password" };
@@ -327,44 +325,9 @@ const authenticateUser = (users, email, password) => {
 // 	// Bad email
 // 	return { user: null, error: "bad email" };
 
-// const protectRoutes = (req, res, next) => {
-// 	const email = req.session.email;
-// 	const path = req.path;
-// 	const allowedPaths = ["/", "/login"];
-
-// 	if (allowedPaths.includes(path)) {
-// 		return next();
-// 	}
-// 	if (!email) {
-// 		return res.redirect("/");
-// 	}
-
-// 	next();
-// };
-
-// const protectRoutes2 = (req, res, next) => {
-// 	const email = req.session.email;
-// 	const path = req.path;
-// 	const allowedPaths = ["/", "/login"];
-
-// 	if (allowedPaths.includes(path)) {
-// 		return next();
-// 	}
-// 	if (!email) {
-// 		return res.redirect("/");
-// 	}
-
-// 	next();
 // }
 
 
 
-// const checkEmail = function(email, password, users) {
-//   for (const key in users) {
-//     const hashedPassword = users[key].password;
-//     if (bcrypt.compareSync(password, hashedPassword) && users[key].email === email) {
-//       return true;
-//     }
-//   }
-//   return false;
-// }
+
+
