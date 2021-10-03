@@ -73,10 +73,12 @@ app.get("/register", (req, res) => {
 
 app.post("/register", (req, res) => {
   const email = req.body.email;
+
   const password = bcrypt.hashSync(req.body.password, 10);
 
-  if (!email || !password) {
-    res.status(400).send("400 Email and Password are empty!");
+
+  if (!email || !req.body.password) {
+    res.status(400).send("400 Email or Password is empty!");
   }
   if (findUserByEmail(email, users)) {
     res.status(400).send("400 This email is already registered");
@@ -132,19 +134,7 @@ app.post("/login", (req, res) => {
   }
 });
 
-// check for /u:id
 
-app.get("/u/:id", (req, res) => {
-  const userID = req.session["user_id"];
-  if (userID) {
-    res.redirect("/urls");
-    //return;
-  }
-  if (!userID) {
-    res.status(403).send("403 This is not yours!!!");
-    res.redirect("/login");
-  }
-});
 
 
 //////////////// COOKIES :
@@ -154,7 +144,6 @@ app.post("/logout", (req, res) => {
   req.session = null
   res.redirect("/urls");
 });
-
 
 
 /////////////// NEW URL PAGES://///////////////
@@ -174,9 +163,32 @@ app.get("/urls/new", (req, res) => {
   }
 });
 
-// submit  with generated shortURL, adds it to urlDatabase  and redirects to "/urls/:shortURL"
+
+//////////HOME PAGE////////////////
+
+app.get("/urls", (req, res) => {
+  const userID = req.session["user_id"];
+  // return URL specific for each userID using 'data' var:
+  const data = urlsForUser(userID, urlDatabase);
+  if (userID) {
+    const user = users[userID];
+    const templateVars = {
+      urls: data, // urlDatabase-all view , or data -userID 
+      user: users[userID]
+    };
+    res.render("urls_index", templateVars);
+  } else {
+    res.status(401).send("You must log in");
+  }
+
+});
+
+
+// submit  with generated shortURL, adds it to urlDatabase  
+//and redirects to "/urls/:shortURL"
 
 app.post("/urls", (req, res) => {
+
   const shortURL = generateRandomString();
   urlDatabase[shortURL] = {
     longURL: req.body.longURL,
@@ -190,26 +202,38 @@ app.post("/urls", (req, res) => {
 
 // Create page for newly created shortURL:
 app.get("/urls/:shortURL", (req, res) => {
+  const shortURL = req.params.shortURL;
   const userID = req.session["user_id"];
+  const userUrls = urlsForUser(userID, urlDatabase);
+  const longURL = urlDatabase[req.params.shortURL].longURL
   const templateVars = {
-    shortURL: req.params.shortURL,
-    longURL: urlDatabase[req.params.shortURL].longURL,
-    user: users[userID] //
-  };
-  res.render("urls_show", templateVars);
-});
-
-
-// endpoint "/u/:shortURL" will redirect to its longURL
-app.get("/u/:shortURL", (req, res) => {
-  const userID = req.session["user_id"];
-  const longURL = urlDatabase[req.params.shortURL].longURL;
-  const templateVars = {
+    urlDatabase,
+    userUrls,
+    shortURL,
+    longURL,
     user: users[userID]
   };
-  res.redirect(longURL);
-  res.render("urls_show", templateVars);
+  if (!userID || !userUrls[shortURL]) {
+    res.status(401).send("401 You are not authorised");
+  } else {
+    res.render('urls_show', templateVars);
+  }
 
+});
+
+// check for /u:shortURL
+
+app.get("/u/:shortURL", (req, res) => {
+  const userID = req.session["user_id"];
+
+  if (userID) {
+    res.redirect("/urls");
+    //return;
+  }
+  if (!userID) {
+    res.status(403).send("403 This is not yours!!!");
+    res.redirect("/login");
+  }
 });
 
 
@@ -235,12 +259,10 @@ app.post("/urls/:shortURL/delete", (req, res) => {
 
 /////// Update URL page:
 app.post("/urls/:shortURL", (req, res) => {
-  // shortUrl remains (get from object keys)
   const shortURL = req.params.shortURL;
-  //longURL is entered by user: retreive from the body key
   const longURL = req.body.longURL;
   const userID = req.session["user_id"];
-  if (!users[userID]) {
+  if (!userID) {
     res.status(401).send("401 Must be logged in");
   }
   if (userID && userID === urlDatabase[shortURL].userID) {
@@ -256,25 +278,6 @@ app.post("/urls/:shortURL", (req, res) => {
 
 })
 
-
-//////////HOME PAGE////////////////
-
-app.get("/urls", (req, res) => {
-  const userID = req.session["user_id"];
-
-  // return URL specific for each userID using 'data' var:
-  const data = urlsForUser(userID, urlDatabase);
-  const user = users[userID];
-  const templateVars = {
-    urls: data, // urlDatabase-all view , or data -userID 
-    user: users[userID]
-  };
-  // if(!users[userID]){
-  //   res.status(401).send("You must log in");    
-  // }
-
-  res.render("urls_index", templateVars);
-});
 
 
 
