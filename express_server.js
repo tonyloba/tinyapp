@@ -74,15 +74,16 @@ app.get("/register", (req, res) => {
 app.post("/register", (req, res) => {
   const email = req.body.email;
 
-  const password = bcrypt.hashSync(req.body.password, 10);
-
-
   if (!email || !req.body.password) {
+
     res.status(400).send("400 Email or Password is empty!");
+    
   }
-  if (findUserByEmail(email, users)) {
+  else if (findUserByEmail(email, users)) {
     res.status(400).send("400 This email is already registered");
+    
   } else {
+    const password = bcrypt.hashSync(req.body.password, 10);
     const userID = generateRandomString();
     user = {
       id: userID,
@@ -225,7 +226,18 @@ app.get("/urls/:shortURL", (req, res) => {
 
 app.get("/u/:shortURL", (req, res) => {
   const userID = req.session["user_id"];
+  const shortURL = req.params.shortURL;
 
+  if (urlDatabase[req.params.shortURL]) {
+    console.log(shortURL)
+    console.log(urlDatabase[req.params.shortURL])
+    const longURL = urlDatabase[req.params.shortURL]['longURL'];
+    
+    res.redirect(longURL);   
+  } 
+  else {
+    res.status(404).send('This short URL does not exist');    
+  }
   if (userID) {
     res.redirect("/urls");
     //return;
@@ -235,6 +247,8 @@ app.get("/u/:shortURL", (req, res) => {
     res.redirect("/login");
   }
 });
+
+
 
 
 //////// Delete URL pages :
